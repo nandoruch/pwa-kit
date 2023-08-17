@@ -19,7 +19,6 @@ import {
     outgoingRequestHook,
     parseCacheControl,
     parseEndParameters,
-    PerformanceTimer,
     processExpressResponse,
     processLambdaResponse,
     updateGlobalAgentOptions,
@@ -973,48 +972,6 @@ describe('updateGlobalAgentOptions', () => {
         Object.entries(from.options).forEach(([key, value]) =>
             expect(to.options[key]).toEqual(value)
         )
-    })
-})
-
-describe('PerformanceTimer tests', () => {
-    const timeFailureTest = test('time() function', () => {
-        const timer = new PerformanceTimer(timeFailureTest.description)
-        const func = sinon.stub()
-        timer.time('test1', func, 1)
-        expect(func.callCount).toBe(1)
-        expect(func.calledWith(1)).toBe(true)
-
-        func.reset()
-        func.throws('Error', 'intentional error')
-        expect(() => timer.time('test2', func, 1)).toThrow('intentional error')
-        expect(func.callCount).toBe(1)
-        timer._observer.disconnect()
-    })
-
-    const timerTest = test('start() and end()', () => {
-        const timer = new PerformanceTimer(timerTest.description)
-
-        return new Promise((resolve) => {
-            timer.start('test3')
-            setTimeout(resolve, 10)
-        })
-            .then(() => timer.end('test3'))
-            .then(() => {
-                const summary = timer.summary
-                expect(summary.length).toBe(1)
-                const entry = summary[0]
-                expect(entry.name).toEqual('test3')
-                expect(entry.duration).toBeGreaterThanOrEqual(5)
-                expect(entry.duration).toBeLessThanOrEqual(30)
-                timer._observer.disconnect()
-            })
-    })
-
-    const idTest = test('operationId tests', () => {
-        const timer = new PerformanceTimer(idTest.description)
-        expect(timer.operationId).toBe(1)
-        expect(timer.operationId).toBe(2)
-        timer._observer.disconnect()
     })
 })
 

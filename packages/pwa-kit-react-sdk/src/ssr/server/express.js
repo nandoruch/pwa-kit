@@ -40,7 +40,6 @@ import {
     outgoingRequestHook,
     parseCacheControl,
     parseEndParameters,
-    PerformanceTimer,
     processLambdaResponse,
     responseSend,
     setQuiet,
@@ -807,14 +806,10 @@ export const cacheResponseWhenDone = ({
         // We know that all the data has been written, so we
         // can now store the response in the cache and call
         // end() on it.
-        const timer = res.locals.timer
         req.app.applicationCache._cacheDeletePromise
             .then(() => {
                 localDevLog(`Req ${locals.requestId}: caching response for ${req.url}`)
-                timer.start('cache-response')
-                return storeResponseInCache(req, res).then(() => {
-                    timer.end('cache-response')
-                })
+                return storeResponseInCache(req, res)
             })
             .finally(() => {
                 originalEnd.call(res, callback)
@@ -891,10 +886,7 @@ export const getResponseFromCache = ({req, res, namespace, key}) => {
     locals.responseCaching.cacheKey = workingKey
 
     // Return a Promise that handles the asynchronous cache lookup
-    const timer = res.locals.timer
-    timer.start('check-response-cache')
     return req.app.applicationCache.get({key: workingKey, namespace}).then((entry) => {
-        timer.end('check-response-cache')
 
         localDevLog(
             `Req ${locals.requestId}: ${
@@ -1187,14 +1179,10 @@ const ssrRequestProcessorMiddleware = (req, res, next) => {
     locals.afterResponseCalled = false
     locals.responseCaching = {}
     locals.requestId = _nextRequestId++
-    locals.timer = new PerformanceTimer(`req${locals.requestId}`)
     locals.originalUrl = req.originalUrl
 
     // Track this response
     req.app._requestMonitor._responseStarted(res)
-
-    // Start timing
-    locals.timer.start('express-overall')
 
     // If the path is /, we enforce that the only methods
     // allowed are GET, HEAD or OPTIONS. This is a restriction
@@ -1211,8 +1199,6 @@ const ssrRequestProcessorMiddleware = (req, res, next) => {
     const afterResponse = () => {
         /* istanbul ignore else */
         if (!locals.afterResponseCalled) {
-            locals.timer.end('express-overall')
-            locals.timingResponse && locals.timer.end('express-response')
             locals.afterResponseCalled = true
             // Emit timing unless the request is for a proxy
             // or bundle path. We don't want to emit metrics
@@ -1235,9 +1221,6 @@ const ssrRequestProcessorMiddleware = (req, res, next) => {
                 }
                 req.app.sendMetric(metricName)
             }
-            locals.timer.finish()
-            // Release reference to timer
-            locals.timer = null
         }
     }
 
@@ -1420,16 +1403,12 @@ const serveServiceWorker = (req, res) => {
  * @private
  */
 const ssrMiddleware = (req, res, next) => {
-    const timer = res.locals.timer
-    timer.start('ssr-overall')
-
     setDefaultHeaders(req, res)
     const renderStartTime = Date.now()
 
     const done = () => {
         const elapsedRenderTime = Date.now() - renderStartTime
         req.app.sendMetric('RenderTime', elapsedRenderTime, 'Milliseconds')
-        timer.end('ssr-overall')
     }
 
     res.on('finish', done)
